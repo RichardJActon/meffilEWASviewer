@@ -7,7 +7,7 @@ A viewer for [meffil](https://github.com/perishky/meffil/wiki) EWAS objects
 ## Installation
 
 ``` r
-devtools::install_github("RichardJActon/meffil_ewas_viewer")
+devtools::install_github("RichardJActon/meffilEWASviewer")
 ```
 
 ## Run the Shiny app
