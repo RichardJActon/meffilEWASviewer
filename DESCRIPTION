@@ -9,5 +9,8 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 6.1.1
-Imports: shiny
+Imports: shiny,
+  shinydashboard,
+  tidyverse
 Depends: tidyverse
+

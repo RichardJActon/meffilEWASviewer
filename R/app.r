@@ -188,59 +188,103 @@ manhattan_plotter <- function(
 #' Shiny app ui object
 #'
 #' @import shiny
+#' @import shinydashboard
+header <- dashboardHeader(title = "meffil EWAS viewer")
 
-ui <- fluidPage(
-	title = "EWAS results",
-	sidebarLayout(
-		sidebarPanel(
-			h2("meffil EWAS viewer"),
-			fileInput(
-				inputId = "ewas", label="ewas object(s)", multiple = FALSE,
-				accept = NULL, width = NULL,
-				buttonLabel = "Browse...", placeholder = "No file selected"
-			),
-			numericInput(
-				inputId = "alpha",
-				label = "Significance Threshold",
-				value = 1e-7,
-				min = 0,
-				max = 1
-			),
-			checkboxInput(
-				inputId = "bi_dir",
-				label = "bi-directional manhattan",
-				value = TRUE
-			),
-			# h4("Selected Probes"),
-			renderText("(Draw a box on the manhattan plot)"),
-			uiOutput(outputId = "pick_model"),
-			#tableOutput(outputId = "selected_points"),
-			uiOutput(outputId = "selected_points"),
-			numericInput(
-				inputId = "DT_output_limit",
-				label = "max rows to display",
-				value = 500,
-				min = 0,
-				step = 1
-			)
-		),
-		mainPanel(
-			fluidRow(
-				plotOutput(
-					outputId = "manhattan",
-					click = "manhattan_click"#,
-					# brush = brushOpts(
-					# 	id = "manhattan_brush"
-					# )
-
-				)
-			),
-			fluidRow(
-				DT::dataTableOutput("manhattan_data")
-			)
-		)
+sidebar <- dashboardSidebar(
+	sidebarMenu(
+		menuItem("manhattan", tabName = "manhattan",icon = icon("chart-bar"))
 	)
+
 )
+
+body <- dashboardBody(
+	tabItems(
+		tabItem(
+			tabName = "manhattan",
+			fluidRow(
+				column(
+					width = 4,
+					valueBoxOutput("info_sig"),
+					box(
+						title = "Inputs",
+						status = "primary",
+						width = 12,
+						solidHeader = TRUE,
+						fileInput(
+							inputId = "ewas",
+							label="ewas object(s)",
+							multiple = FALSE,
+							accept = NULL, width = NULL,
+							buttonLabel = "Browse...",
+							placeholder = "No file selected"
+						),
+						numericInput(
+							inputId = "alpha",
+							label = "Significance Threshold",
+							value = 1e-7,
+							min = 0,
+							max = 1
+						),
+						checkboxInput(
+							inputId = "bi_dir",
+							label = "bi-directional manhattan",
+							value = TRUE
+						),
+						# h4("Selected Probes"),
+						renderText("(Draw a box on the manhattan plot)"),
+						uiOutput(outputId = "pick_model"),
+						#tableOutput(outputId = "selected_points"),
+						numericInput(
+							inputId = "DT_output_limit",
+							label = "max rows to display",
+							value = 500,
+							min = 0,
+							step = 1
+						)
+					),
+					box(
+						width = 12,
+						title = "Select A Point",
+						solidHeader = TRUE,
+						status = "info",
+						uiOutput(outputId = "selected_points")
+					)
+				),
+				column(
+					width = 8,
+					box(
+						title = "Manhattan",
+						collapsible = TRUE,
+						solidHeader = TRUE,
+						status = "primary",
+						width = 12,
+						#height = "800px",#60vh",
+						plotOutput(
+							height = 750,
+							outputId = "manhattan",
+							click = "manhattan_click"#,
+							# brush = brushOpts(
+							# 	id = "manhattan_brush"
+							# )
+
+						)
+					),
+					box(
+						title = "Probe Details",
+						status = "primary",
+						width = 12,
+						solidHeader = TRUE,
+						DT::dataTableOutput("manhattan_data")
+					)
+				)
+			)
+		)#
+	)
+
+)
+
+ui <- dashboardPage(header, sidebar, body)
 
 ###############################################################################
 # Server
@@ -357,4 +401,18 @@ server <- function(input, output) {
 			DT::datatable()
 	})
 
+	output$info_sig <- renderValueBox({
+		valueBox(
+			width = 6,
+			color = "green",
+			preMan()$stats %>%
+				filter(p.value < input$alpha) %>%
+				nrow(),
+			paste0(
+				"Significant sites (p < ",
+				sprintf("%.6g",input$alpha),")"
+			),
+			icon = icon("info")
+		)
+	})
 }

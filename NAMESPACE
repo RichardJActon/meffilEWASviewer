@@ -2,3 +2,4 @@
 
 export(ewas_viewer)
 import(shiny)
+import(shinydashboard)
