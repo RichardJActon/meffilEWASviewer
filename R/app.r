@@ -194,25 +194,44 @@ ui <- fluidPage(
 	sidebarLayout(
 		sidebarPanel(
 			h2("meffil EWAS viewer"),
-			renderText("(meffil ewas object saved as .rds)"),
 			fileInput(
-				inputId = "ewas", label="ewas object", multiple = FALSE,
+				inputId = "ewas", label="ewas object(s)", multiple = FALSE,
 				accept = NULL, width = NULL,
 				buttonLabel = "Browse...", placeholder = "No file selected"
 			),
-			uiOutput(outputId = "pick_model"),
-			h4("Selected Probes"),
+			numericInput(
+				inputId = "alpha",
+				label = "Significance Threshold",
+				value = 1e-7,
+				min = 0,
+				max = 1
+			),
+			checkboxInput(
+				inputId = "bi_dir",
+				label = "bi-directional manhattan",
+				value = TRUE
+			),
+			# h4("Selected Probes"),
 			renderText("(Draw a box on the manhattan plot)"),
-			tableOutput(outputId = "selected_points")
+			uiOutput(outputId = "pick_model"),
+			#tableOutput(outputId = "selected_points"),
+			uiOutput(outputId = "selected_points"),
+			numericInput(
+				inputId = "DT_output_limit",
+				label = "max rows to display",
+				value = 500,
+				min = 0,
+				step = 1
+			)
 		),
 		mainPanel(
 			fluidRow(
 				plotOutput(
 					outputId = "manhattan",
-					click = "manhattan_click",
-					brush = brushOpts(
-						id = "manhattan_brush"
-					)
+					click = "manhattan_click"#,
+					# brush = brushOpts(
+					# 	id = "manhattan_brush"
+					# )
 
 				)
 			),
@@ -254,37 +273,87 @@ server <- function(input, output) {
 		req(input$model, cancelOutput = TRUE)
 		manhattan_pre_proc_analysis(
 			input$model,
+			bi_dir = input$bi_dir,
 			ewas = ewas()
 		)
 	})
 
 	output$manhattan <- renderPlot({
-		manhattan_plotter(preMan())
+		manhattan_plotter(
+			preMan(),
+			threshold = input$alpha,
+			bi_dir = input$bi_dir
+		)
 	})
 
-	output$selected_points <- renderTable({
-		req(input$manhattan_brush,cancelOutput = TRUE)
-		brushedPoints(
+	# output$selected_points <- renderTable({
+	# 	req(input$manhattan_brush,cancelOutput = TRUE)
+	# 	# nearPoints(
+	# 	# 	preMan()$stats,
+	# 	# 	input$manhattan_click,
+	# 	# 	addDist = FALSE,
+	# 	# 	xvar = "position",
+	# 	# 	yvar = "stat"
+	# 	# ) %>%
+	# 	brushedPoints(
+	# 		preMan()$stats,
+	# 		input$manhattan_brush,
+	# 		xvar = "position",
+	# 		yvar = "stat"
+	# 	) %>%
+	# 	select(chromosome,position,probe,p.value,fdr,coefficient)
+	# })
+
+	clickedPointRow <- reactive({
+		req(input$manhattan_click,cancelOutput = TRUE)
+		#point <-
+		nearPoints(
 			preMan()$stats,
-			input$manhattan_brush,
+			input$manhattan_click,
+			addDist = FALSE,
 			xvar = "position",
-			yvar = "stat"
-		) %>%
-			select(chromosome,position,probe,p.value,fdr,coefficient)
+			yvar = "stat",
+			maxpoints = 1
+		) #%>%
+		#select(chromosome,position,probe,p.value,fdr,coefficient)
+	})
+
+	#http://genome.ucsc.edu/cgi-bin/hgTracks?org=human&db=hg19&position=chrX:Y-Z
+	output$selected_points <- renderUI({
+		pointDat <- clickedPointRow()
+		expr = list(
+			h4(paste0("Selected Probe: ",pointDat$probe)),
+			renderText("Probe Position: "),
+			a(
+				paste0(
+					pointDat$chromosome," : ",
+					format(pointDat$position,big.mark = ",")
+				),
+				href = paste0(
+					"http://genome.ucsc.edu/cgi-bin/hgTracks?org=human&db=hg19&position=",
+					pointDat$chromosome,":",
+					pointDat$position - 100,"-",
+					pointDat$position +100
+				)
+			),
+			HTML(
+				paste0(
+					" (hg19)<br/>",
+					"p-value: ",sprintf("%.6g",pointDat$p.value),"<br/>",
+					"FDR: ",sprintf("%.6g",pointDat$fdr),"<br/>",
+					"coefficient: ",sprintf("%.6g",pointDat$coefficient),
+					"<br/><br/>"
+				)
+			)
+		)
 	})
 
 	output$manhattan_data <- DT::renderDataTable({
-		# nearPoints(
-		# 	preMan()$stats,
-		# 	input$manhattan_click,
-		# 	addDist = FALSE,
-		# 	xvar = "position",
-		# 	yvar = "stat"
-		# ) %>%
 		preMan()$stats %>%
 			select(chromosome,position,probe,p.value,fdr,coefficient) %>%
 			arrange(p.value) %>%
-			head(n=500) %>%
+			filter(p.value < input$alpha) %>%
+			head(n = input$DT_output_limit) %>%
 			DT::datatable()
 	})
 
