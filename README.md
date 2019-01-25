@@ -15,7 +15,7 @@ devtools::install_github("RichardJActon/meffilEWASviewer")
 There's only one exported function in the package and it runs the Shiny app:
 
 ``` r
-meffil_ewas_viewer::ewas_viewer()
+meffilEWASviewer::ewas_viewer()
 ```
 
 This will start the Shiny application running locally.
@@ -33,7 +33,7 @@ The name ‘shinyApp’ was chosen for consistency with Shiny Server which uses 
 Inside this directory there is a single ‘app.R’ file with the following line in it:
 
 ```
-meffil_ewas_viewer::ewas_viewer()
+meffilEWASviewer::ewas_viewer()
 ```
 
 If your shiny server is configured for Apps served [from a users' home directory](http://docs.rstudio.com/shiny-server/#host-per-user-application-directories) (AKA self-publishing) then you can host your own version of the app as described below. If your shiny server is deployed centrally with apps located in `/srv/shiny-server` (usually) your sysadmin can follow similar step to those below.
