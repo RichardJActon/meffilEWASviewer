@@ -181,6 +181,24 @@ manhattan_plotter <- function(
 	return(p)
 }
 
+#' get_gene_cards
+#'
+#'
+#' @param str
+get_gene_cards <- function(str) {
+	if (str != "") {
+		genes <- str %>% strsplit(";") %>% unlist() %>% unique()
+		lapply(genes,function(gene){
+			#https://www.genecards.org/cgi-bin/carddisp.pl?gene=",gene
+			paste0(
+				"<a target='_blank' ",
+				"href='https://www.genecards.org/cgi-bin/carddisp.pl?gene=",
+				gene,"'>",gene,"</a>"
+			)
+		}) %>% paste0(collapse = "; ")
+	} else {"NA"}
+}
+
 ###############################################################################
 # UI
 ###############################################################################
@@ -195,7 +213,6 @@ sidebar <- dashboardSidebar(
 	sidebarMenu(
 		menuItem("manhattan", tabName = "manhattan",icon = icon("chart-bar"))
 	)
-
 )
 
 body <- dashboardBody(
@@ -205,50 +222,74 @@ body <- dashboardBody(
 			fluidRow(
 				column(
 					width = 4,
-					valueBoxOutput("info_sig"),
-					box(
-						title = "Inputs",
-						status = "primary",
-						width = 12,
-						solidHeader = TRUE,
-						fileInput(
-							inputId = "ewas",
-							label="ewas object(s)",
-							multiple = FALSE,
-							accept = NULL, width = NULL,
-							buttonLabel = "Browse...",
-							placeholder = "No file selected"
-						),
-						numericInput(
-							inputId = "alpha",
-							label = "Significance Threshold",
-							value = 1e-7,
-							min = 0,
-							max = 1
-						),
-						checkboxInput(
-							inputId = "bi_dir",
-							label = "bi-directional manhattan",
-							value = TRUE
-						),
-						# h4("Selected Probes"),
-						renderText("(Draw a box on the manhattan plot)"),
-						uiOutput(outputId = "pick_model"),
-						#tableOutput(outputId = "selected_points"),
-						numericInput(
-							inputId = "DT_output_limit",
-							label = "max rows to display",
-							value = 500,
-							min = 0,
-							step = 1
+					fluidRow(
+						uiOutput(outputId = "headlines")
+					),
+					fluidRow(
+						box(
+							width = 12,
+							title = "Upload",
+							collapsible = TRUE,
+							status = "primary",
+							solidHeader = TRUE,
+							fileInput(
+								inputId = "ewas",
+								label="ewas object(s)",
+								multiple = FALSE,
+								accept = NULL, width = NULL,
+								buttonLabel = "Browse...",
+								placeholder = "No file selected"
+							)
 						)
 					),
-					box(
-						width = 12,
-						title = "Select A Point",
-						solidHeader = TRUE,
-						status = "info",
-						uiOutput(outputId = "selected_points")
+					fluidRow(
+						box(
+							title = "Inputs",
+							status = "primary",
+							width = 12,
+							solidHeader = TRUE,
+							collapsible = TRUE,
+							column(
+								width = 6,
+								uiOutput(outputId = "pick_model"),
+								numericInput(
+									inputId = "alpha",
+									label = "Significance Threshold",
+									value = 1e-7,
+									min = 0,
+									max = 1
+								),
+								checkboxInput(
+									inputId = "bi_dir",
+									label = "bi-directional manhattan",
+									value = FALSE
+								)
+							),
+							column(
+								width = 6,
+								selectInput(
+									inputId = "platform",
+									label = "platform",
+									choices = c("EPIC","450k"),
+									selected = "EPIC"
+								),
+								#tableOutput(outputId = "selected_points"),
+								numericInput(
+									inputId = "DT_output_limit",
+									label = "max rows to display",
+									value = 500,
+									min = 0,
+									step = 1
+								)
+							)
+						),
+						box(
+							width = 12,
+							title = "Select A Point",
+							solidHeader = TRUE,
+							status = "info",
+							uiOutput(outputId = "selected_points")
+						)
 					)
 				),
 				column(
@@ -259,9 +300,8 @@ body <- dashboardBody(
 						solidHeader = TRUE,
 						status = "primary",
 						width = 12,
-						#height = "800px",#60vh",
 						plotOutput(
-							height = 750,
+							height = "60vh",
 							outputId = "manhattan",
 							click = "manhattan_click"#,
 							# brush = brushOpts(
@@ -272,6 +312,7 @@ body <- dashboardBody(
 					),
 					box(
 						title = "Probe Details",
+						collapsible = TRUE,
 						status = "primary",
 						width = 12,
 						solidHeader = TRUE,
@@ -295,22 +336,10 @@ server <- function(input, output) {
 	options(shiny.maxRequestSize=3000*1024^2)
 
 	ewas <- reactive({
-		#ewas <<- readRDS(file = input$ewas$datapath)
 		if (is.null(input$ewas)){
 			return(NULL)
 		}
 		readRDS(file = input$ewas$datapath)
-	})
-
-	observeEvent(input$ewas,{
-		output$pick_model <- renderUI({
-			selectInput(
-				inputId = "model",
-				label = "model",
-				choices = names(ewas()$analyses),
-				selected = names(ewas()$analyses)[1]
-			)
-		})
 	})
 
 	preMan <- reactive({
@@ -319,6 +348,68 @@ server <- function(input, output) {
 			input$model,
 			bi_dir = input$bi_dir,
 			ewas = ewas()
+		)
+	})
+
+	observeEvent(input$ewas,{
+
+		output$pick_model <- renderUI({
+			selectInput(
+				inputId = "model",
+				label = "model",
+				choices = names(ewas()$analyses),
+				selected = names(ewas()$analyses)[1]
+			)
+		})
+
+		output$headlines <- renderUI({
+			req(input$model, cancelOutput = TRUE)
+			box(
+				title = "Outline",
+				width = 12,
+				color = "green",
+				background = "green",
+				collapsible = TRUE,
+				solidHeader = TRUE,
+				column(
+					width = 6,
+					h3(preMan()$stats %>%
+						filter(p.value < input$alpha) %>%
+						nrow()
+					),
+					renderText(
+						paste0(
+							"Significant sites (p < ",
+							sprintf("%.6g",input$alpha),")"
+						)
+					),
+					renderText(
+						paste0(
+							"Total sites: ",
+							ewas()$analyses[[input$model]]$table %>%
+								nrow() %>%
+								format(big.mark = ",")
+						)
+					)
+				),
+				column(
+					width = 6,
+					h3("User Covariates"),
+					renderText(
+						ewas()$covariates %>%
+							colnames() %>%
+							paste0(collapse = " + ")
+					)
+				)
+			)
+		})
+	})
+
+	manifest <- reactive({
+		switch(
+			input$platform,
+			"EPIC" = manifest_EPIC,
+			"450k" = manifest_450k
 		)
 	})
 
@@ -350,7 +441,6 @@ server <- function(input, output) {
 
 	clickedPointRow <- reactive({
 		req(input$manhattan_click,cancelOutput = TRUE)
-		#point <-
 		nearPoints(
 			preMan()$stats,
 			input$manhattan_click,
@@ -358,8 +448,7 @@ server <- function(input, output) {
 			xvar = "position",
 			yvar = "stat",
 			maxpoints = 1
-		) #%>%
-		#select(chromosome,position,probe,p.value,fdr,coefficient)
+		)
 	})
 
 	#http://genome.ucsc.edu/cgi-bin/hgTracks?org=human&db=hg19&position=chrX:Y-Z
@@ -367,7 +456,7 @@ server <- function(input, output) {
 		pointDat <- clickedPointRow()
 		expr = list(
 			h4(paste0("Selected Probe: ",pointDat$probe)),
-			renderText("Probe Position: "),
+			HTML("<b>Probe Position:</b><br/>"),
 			a(
 				paste0(
 					pointDat$chromosome," : ",
@@ -378,41 +467,57 @@ server <- function(input, output) {
 					pointDat$chromosome,":",
 					pointDat$position - 100,"-",
 					pointDat$position +100
-				)
+				),
+				target="_blank"
 			),
 			HTML(
 				paste0(
 					" (hg19)<br/>",
-					"p-value: ",sprintf("%.6g",pointDat$p.value),"<br/>",
-					"FDR: ",sprintf("%.6g",pointDat$fdr),"<br/>",
-					"coefficient: ",sprintf("%.6g",pointDat$coefficient),
-					"<br/><br/>"
+					"<b>p-value:</b> ",sprintf("%.6g",pointDat$p.value),"<br/>",
+					"<b>FDR:</b> ",sprintf("%.6g",pointDat$fdr),"<br/>",
+					"<b>coefficient:</b> ",sprintf("%.6g",pointDat$coefficient),
+					"<br/><b>Nearby Genes:</b> ",
+					"<br/>"
+				)
+			),
+			HTML(
+				get_gene_cards(
+					manifest() %>%
+						filter(name == pointDat$probe) %>%
+						pull(gene.symbol)
 				)
 			)
 		)
 	})
 
 	output$manhattan_data <- DT::renderDataTable({
-		preMan()$stats %>%
-			select(chromosome,position,probe,p.value,fdr,coefficient) %>%
-			arrange(p.value) %>%
-			filter(p.value < input$alpha) %>%
-			head(n = input$DT_output_limit) %>%
-			DT::datatable()
+
+		# dplyr::select(chromosome,position,probe,p.value,fdr,coefficient) %>%
+		# 	arrange(p.value) %>%
+		# 	filter(p.value < input$alpha) %>%
+		# 	head(n = input$DT_output_limit) %>%
+		# 	DT::datatable()
+
+		left_join(
+			preMan()$stats %>%
+				dplyr::select(probe,p.value,fdr,coefficient) %>%#chromosome,position,
+				arrange(p.value) %>%
+				filter(p.value < input$alpha) %>%
+				head(n = input$DT_output_limit), #%>%
+			manifest() %>%
+				dplyr::rename(probe = name),
+			by = "probe"
+		) %>%
+		dplyr::select(
+			Chr=chromosome,Coord=position,probe,
+			`p-value`=p.value,fdr,Coef=coefficient,
+			`Gene Symbol`=gene.symbol#,masks
+		) %>%
+		DT::datatable(
+			rownames = FALSE
+		) %>%
+		DT::formatSignif(c("p-value","fdr","Coef"), digits = 5) %>%
+		DT::formatRound(c("Coord"),digits = 0)
 	})
 
-	output$info_sig <- renderValueBox({
-		valueBox(
-			width = 6,
-			color = "green",
-			preMan()$stats %>%
-				filter(p.value < input$alpha) %>%
-				nrow(),
-			paste0(
-				"Significant sites (p < ",
-				sprintf("%.6g",input$alpha),")"
-			),
-			icon = icon("info")
-		)
-	})
 }
